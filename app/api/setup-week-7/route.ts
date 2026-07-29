@@ -10,16 +10,14 @@ export async function GET() {
     console.log(`Fetching schedule for Week ${WEEK} of ${SEASON}...`);
     const schedule = await getHistoricalSchedule(WEEK, SEASON);
 
-    // --- THE FIX: We added .limit(5000) so Supabase doesn't chop off half the players! ---
     console.log("Fetching player positions from our own database...");
     const { data: dbPlayers, error: dbError } = await supabase
       .from('players')
       .select('player_id, position')
-      .limit(5000); 
+      .limit(10000); // 10,000 limit ensures we get everyone!
 
     if (dbError) throw dbError;
     
-    // Create a fast dictionary (Forcing strings so the IDs match perfectly)
     const positionMap = new Map();
     if (dbPlayers) {
       dbPlayers.forEach((p: any) => positionMap.set(String(p.player_id), p.position));
@@ -83,28 +81,34 @@ export async function GET() {
           
           const playerName = player.longName || player.espnName || "Unknown Player";
           const playerIDStr = String(player.playerID);
-          
-          // Look up the position in our map
           const playerPosition = positionMap.get(playerIDStr) || "UNK";
 
-          // --- THE SAFETY LOCK --- 
-          // ONLY add to uniquePlayersMap if they are completely missing from the DB!
           if (player.playerID && !positionMap.has(playerIDStr)) {
             uniquePlayersMap.set(playerIDStr, {
               player_id: player.playerID,
               name: playerName,
               team_abv: player.teamAbv || player.team || game.home, 
-              position: "UNK" // We only do this for retired/missing players
+              position: "UNK"
             });
           }
 
+          // --- EXTRACT EVERY STAT ---
           const passYds = parseInt(player.Passing?.passYds || "0");
           const passTD = parseInt(player.Passing?.passTD || "0");
+          
           const rushYds = parseInt(player.Rushing?.rushYds || "0");
+          const rushTD = parseInt(player.Rushing?.rushTD || "0");
+          
           const recYds = parseInt(player.Receiving?.recYds || "0");
           const recTD = parseInt(player.Receiving?.recTD || "0");
+          
+          const kickRetTD = parseInt(player.Kicking?.kickReturnTD || "0");
+          const puntRetTD = parseInt(player.Punting?.puntReturnTD || "0");
 
-          if (passYds > 0 || rushYds > 0 || recYds > 0 || passTD > 0 || recTD > 0) {
+          // --- THE MATH: Combine them all into one number! ---
+          const totalTouchdownsScored = rushTD + recTD + kickRetTD + puntRetTD;
+
+          if (passYds > 0 || rushYds > 0 || recYds > 0 || passTD > 0 || totalTouchdownsScored > 0) {
             playerStatsData.push({
               stat_id: `${player.playerID}-Wk${WEEK}-${SEASON}`,
               player_id: player.playerID,
@@ -114,7 +118,7 @@ export async function GET() {
               passing_yards: passYds,
               rushing_yards: rushYds,
               receiving_yards: recYds,
-              touchdowns_caught: recTD,
+              touchdowns_scored: totalTouchdownsScored, // Now includes ALL scoring!
               touchdowns_thrown: passTD
             });
           }
@@ -124,7 +128,6 @@ export async function GET() {
 
     console.log("All data parsed! Saving to Supabase...");
 
-    // Only upsert the completely missing players (This stops the DB from being overwritten!)
     const newPlayersToSave = Array.from(uniquePlayersMap.values());
     if (newPlayersToSave.length > 0) {
       const { error: newPlayersError } = await supabase.from('players').upsert(newPlayersToSave);
