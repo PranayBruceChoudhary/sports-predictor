@@ -76,7 +76,7 @@ export async function GET() {
       });
 
       // 3. THE PLAYER STATS
-      if (boxScore.playerStats) {
+if (boxScore.playerStats) {
         Object.values(boxScore.playerStats).forEach((player: any) => {
           
           const playerName = player.longName || player.espnName || "Unknown Player";
@@ -92,23 +92,29 @@ export async function GET() {
             });
           }
 
-          // --- EXTRACT EVERY STAT ---
+          // --- EXTRACT OFFENSIVE STATS ---
           const passYds = parseInt(player.Passing?.passYds || "0");
           const passTD = parseInt(player.Passing?.passTD || "0");
-          
           const rushYds = parseInt(player.Rushing?.rushYds || "0");
           const rushTD = parseInt(player.Rushing?.rushTD || "0");
-          
           const recYds = parseInt(player.Receiving?.recYds || "0");
           const recTD = parseInt(player.Receiving?.recTD || "0");
-          
           const kickRetTD = parseInt(player.Kicking?.kickReturnTD || "0");
           const puntRetTD = parseInt(player.Punting?.puntReturnTD || "0");
 
-          // --- THE MATH: Combine them all into one number! ---
+          // --- EXTRACT DEFENSIVE STATS ---
+          const tackles = parseInt(player.Defense?.totalTackles || "0");
+          const interceptions = parseInt(player.Defense?.defensiveInterceptions || "0");
+          const sacks = parseFloat(player.Defense?.sacks || "0"); // parseFloat for decimals!
+          const forcedFumbles = parseInt(player.Defense?.forcedFumbles || "0");
+
           const totalTouchdownsScored = rushTD + recTD + kickRetTD + puntRetTD;
 
-          if (passYds > 0 || rushYds > 0 || recYds > 0 || passTD > 0 || totalTouchdownsScored > 0) {
+          // Check if they did ANYTHING (Offense OR Defense)
+          if (
+            passYds > 0 || rushYds > 0 || recYds > 0 || passTD > 0 || totalTouchdownsScored > 0 ||
+            tackles > 0 || interceptions > 0 || sacks > 0 || forcedFumbles > 0
+          ) {
             playerStatsData.push({
               stat_id: `${player.playerID}-Wk${WEEK}-${SEASON}`,
               player_id: player.playerID,
@@ -118,8 +124,14 @@ export async function GET() {
               passing_yards: passYds,
               rushing_yards: rushYds,
               receiving_yards: recYds,
-              touchdowns_scored: totalTouchdownsScored, // Now includes ALL scoring!
-              touchdowns_thrown: passTD
+              touchdowns_scored: totalTouchdownsScored,
+              touchdowns_thrown: passTD,
+              
+              // Add the new defense stats to the package!
+              tackles: tackles,
+              interceptions: interceptions,
+              sacks: sacks,
+              forced_fumbles: forcedFumbles
             });
           }
         });
