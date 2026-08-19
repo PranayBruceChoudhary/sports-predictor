@@ -3,12 +3,28 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../utils/supabase';
 
-// --- NEW: A Reusable Component for a Searchable Dropdown ---
+// --- UPGRADED: The Searchable Dropdown now filters by Position! ---
 function PlayerSearchBox({ category, players, currentPick, onSave, getPlayerName }: any) {
   const [searchTerm, setSearchTerm] = useState('');
 
-  // The Magic Filter: Only keep players whose name matches what you type!
-  const filteredPlayers = players.filter((p: any) => 
+  // 1. THE POSITION FILTER
+  // We narrow down the massive list based on the specific stat category
+  const categoryFilteredPlayers = players.filter((p: any) => {
+    if (category === 'Passing Yards') {
+      return p.position === 'QB';
+    } 
+    else if (category === 'Rushing Yards') {
+      return ['RB', 'WR', 'QB'].includes(p.position); // Added QB for running QBs!
+    } 
+    else if (category === 'Receiving Yards' || category === 'Touchdowns') {
+      return ['WR', 'RB', 'TE'].includes(p.position);
+    }
+    return true; // Fallback just in case
+  });
+
+  // 2. THE TEXT SEARCH FILTER
+  // Now we take that narrowed-down list and apply the user's text search!
+  const finalFilteredPlayers = categoryFilteredPlayers.filter((p: any) => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -16,34 +32,30 @@ function PlayerSearchBox({ category, players, currentPick, onSave, getPlayerName
     <div className="mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
       <label className="block text-sm font-bold text-gray-800 mb-2">{category} Leader</label>
       
-      {/* THE SEARCH BAR */}
       <input 
         type="text" 
-        placeholder="Search for a player..." 
+        placeholder={`🔍 Search for a ${category === 'Passing Yards' ? 'QB' : 'Player'}...`} 
         className="w-full p-2 mb-2 border border-gray-300 rounded text-sm text-black focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
       />
 
-      {/* THE DROPDOWN (Now only shows filtered players!) */}
       <select 
         value={currentPick}
         onChange={(e) => {
           onSave(category, e.target.value);
-          setSearchTerm(''); // Clear the search bar after picking!
+          setSearchTerm(''); 
         }}
         className="w-full p-2 border border-gray-300 rounded bg-white text-black text-sm cursor-pointer"
       >
         <option value="">-- Select a Player --</option>
-        {filteredPlayers.map((p: any) => (
-          // Added their team abbreviation so you know exactly who they are!
+        {finalFilteredPlayers.map((p: any) => (
           <option key={p.player_id} value={p.player_id}>
             {p.name} ({p.position} - {p.team_abv})
           </option>
         ))}
       </select>
 
-      {/* SAVED CONFIRMATION */}
       {currentPick && (
         <div className="mt-2 inline-block bg-green-100 px-3 py-1 rounded-full border border-green-200">
           <p className="text-xs text-green-700 font-bold">✓ Saved: {getPlayerName(currentPick)}</p>
@@ -152,7 +164,7 @@ export default function LeaguePage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
         
-        {/* COLUMN 1: PLAYER LEADERS (Now using the Searchable Component!) */}
+        {/* COLUMN 1: PLAYER LEADERS */}
         <div className="bg-white p-6 rounded-xl shadow-lg">
           <h2 className="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Player Stat Leaders</h2>
           {['Passing Yards', 'Rushing Yards', 'Receiving Yards', 'Touchdowns'].map(cat => {
